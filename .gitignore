@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Databases
+*.h5
+
+# bot secrets
+bot-secrets.py
