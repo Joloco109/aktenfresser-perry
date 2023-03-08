@@ -10,8 +10,8 @@ class Scraper:
     _watchlist: Datenbank
 
     def __init__(self, datenbank=None, watchlist=None):
-        self._daten = Datenbank("./daten.h5") if datenbank is None else datenbank
-        self._watchlist = Datenbank("./watch.h5") if watchlist is None else watchlist
+        self._daten = Datenbank("./data/daten.h5") if datenbank is None else datenbank
+        self._watchlist = Datenbank("./data/watch.h5") if watchlist is None else watchlist
 
     def watch(self, entry:dict) -> None:
         '''

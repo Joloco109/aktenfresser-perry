@@ -5,7 +5,7 @@ import zoneinfo
 from dataclasses import dataclass
 from termin import Termin
 
-DEFAULT_HDF_STORE = "./daten.h5"
+DEFAULT_HDF_STORE = "./data/daten.h5"
 TIMEZONE = 'Europe/Berlin'
 
 COLUMNS = {
@@ -101,5 +101,4 @@ def convert_np_types(data:pd.DataFrame) -> pd.DataFrame:
     '''
     Creates a DataFrame copy of data with the alternate numpy column types compatible with storing 
     '''
-    for c,t in COLUMNS.items():
     return pd.DataFrame({ c: data[c].astype(t[-1]) for c,t in COLUMNS.items() })
