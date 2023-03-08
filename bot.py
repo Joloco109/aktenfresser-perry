@@ -87,6 +87,12 @@ class Perry(discord.Client):
     async def refresh_database(self):
         channel = self.get_channel(1073722302908346420)  # channel ID goes here
         watched = self.scraper.update()
+
+        # TODO ankuendigen
+
+        # write the list back to termine, with all changes
+        self.datenbank.append(watched)
+
         await channel.send("Die aktuelle Seite des Justizzentrums Aachen wurde abgerufen")
 
     @refresh_database.before_loop
