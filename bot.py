@@ -31,11 +31,9 @@ class Perry(discord.Client):
         # Note: When using commands.Bot instead of discord.Client, the bot will
         # maintain its own tree instead.
         self.tree = app_commands.CommandTree(self)
-        self.watchlist = []
-        self.scraper = Scraper()
-        self.datenbank = Datenbank()
-
-        self.lade_watchlist()
+        self.watchlist = Datenbank(DATA_STORAGE+"/watch.h5")
+        self.datenbank = Datenbank(DATA_STORAGE+"/daten.h5")
+        self.scraper = Scraper(datenbank=self.datenbank, watchlist=self.watchlist)
 
     def website_abrufen(self) -> None:
         """
@@ -49,23 +47,8 @@ class Perry(discord.Client):
         None
 
         """
+        self.scraper.update()
         pass
-
-    def lade_watchlist(self):
-        """
-
-        Returns
-        -------
-
-        """
-        try:
-            with open(os.path.join(DATA_STORAGE, "watchlist.pkl"), "r") as pkl_datei:
-                self.watchlist = pickle.load(pkl_datei)
-
-        except FileNotFoundError as e:
-            print("Es konnte keine alte Watchlist geladen werden.")
-
-        return self.watchlist
 
     def speichere_watchlist(self):
         """
@@ -74,16 +57,8 @@ class Perry(discord.Client):
         -------
 
         """
+        self.watchlist.flush()
 
-        try:
-            with open(os.path.join(DATA_STORAGE, "watchlist.pkl"), "w") as pkl_datei:
-                pickle.dump(self.watchlist, pkl_datei)
-
-        except FileNotFoundError as e:
-            print(
-                "Die Watchlist konnte nicht in der angegebenen Datei gespeichert werden. ist der Zielordner vorhanden?")
-
-        return
 
     ################ BOTCOMMANDS ################
 
@@ -102,6 +77,7 @@ class Perry(discord.Client):
     @tasks.loop(minutes=60)  # task runs every 60 seconds
     async def refresh_database(self):
         channel = self.get_channel(1073722302908346420)  # channel ID goes here
+        watched = self.scraper.update()
         await channel.send("Die aktuelle Seite des Justizzentrums Aachen wurde abgerufen")
 
     @refresh_database.before_loop
@@ -126,7 +102,7 @@ async def az_hinzufuegen(interaction: discord.Interaction, aktenzeichen: str):
     cleaned_az = utils.clean_akteneichen(aktenzeichen)
 
     if cleaned_az is None:
-        perry.watchlist.append(cleaned_az)
+        perry.scraper.watch({"aktenzeichen":cleaned_az})
         await interaction.response.send_message(f"Das Aktenzeichen {cleaned_az} wurde auf die Watchlist aufgenommen!")
     else:
         await interaction.response.send_message(
@@ -138,7 +114,7 @@ async def az_entfernen(interaction: discord.Interaction, aktenzeichen: str):
     cleaned_az = utils.clean_akteneichen(aktenzeichen)
 
     if cleaned_az is None:
-        perry.watchlist.remove(cleaned_az)
+        perry.scraper.unwatch({"aktenzeichen":cleaned_az})
         await interaction.response.send_message(f"Das Aktenzeichen {aktenzeichen} wurde aus der Watchlist entfernt!")
     else:
         await interaction.response.send_message(

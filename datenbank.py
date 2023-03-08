@@ -1,3 +1,4 @@
+import typing
 import pandas as pd
 from datetime import datetime
 import zoneinfo
@@ -14,8 +15,9 @@ COLUMNS = {
         "verfahren":    [pd.StringDtype(), object],
         "saal":         [pd.StringDtype(), object],
         "hinweis":      [pd.StringDtype(), object],
-        "angekuendigt": [pd.BooleanDtype(),int],
-        "erstellt":     [pd.DatetimeTZDtype(tz=TIMEZONE)]
+        "angekuendigt": [pd.BooleanDtype(),object],
+        "erstellt":     [pd.DatetimeTZDtype(tz=TIMEZONE)],
+        "veraendert":   [pd.DatetimeTZDtype(tz=TIMEZONE)],
         }
 
 class Datenbank:
@@ -31,12 +33,6 @@ class Datenbank:
         except KeyError:
             self._termine = None
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._store.put("termine", convert_np_types(self._termine), format='t', append=False)
-
     @property
     def termine(self):
         '''
@@ -47,14 +43,15 @@ class Datenbank:
             raise ValueError('No Termine exist yet')
         return self._termine
 
-    def append(self, data:[Termin]):
+    def append(self, data:typing.List[Termin]):
         df = {}
         for c in COLUMNS:
-            if c == 'erstellt':
+            if c in ('erstellt','veraendert'):
                 continue
             df[c] = [ getattr(d, c) for d in data ]
         now_local = datetime.now(zoneinfo.ZoneInfo(TIMEZONE))
-        df['erstellt'] = [now_local for _ in data]
+        df['erstellt']   = [now_local for _ in data]
+        df['veraendert'] = [now_local for _ in data]
         self.append_frame(pd.DataFrame(df))
 
     def append_frame(self, data:pd.DataFrame):
@@ -62,15 +59,36 @@ class Datenbank:
         if self._termine is None:
             self._termine = data
         else:
-            self._termine = pd.concat((self._termine,data))
+            #TODO Keep erstellt column, when dropping duplicates
+            self._termine = pd.concat((self._termine,data)).drop_duplicates(['aktenzeichen','datum'], keep='last')
         self._store.put("termine", convert_np_types(data), format='t', append=True)
 
-    def __getitem__(self, key) -> Termin:
-        return Termin(**(self._termine[key]))
+    def search(self, value, column='aktenzeichen'):
+        if isinstance(column, str):
+            column = [column]
+        return
+
+    def __getitem__(self, key) -> typing.Union[Termin, typing.List[Termin]]:
+        if isinstance(key,  slice):
+            termine = []
+            for i,t in self._termine.loc[key].iterrows():
+                termin_args = { **(t) }
+                termin_args.pop('erstellt', None)
+                termin_args.pop('veraendert', None)
+                termine.append(Termin(**termin_args))
+            return termine
+        else:
+            termin_args = { **(self._termine.loc[key]) }
+            termin_args.pop('erstellt', None)
+            termin_args.pop('veraendert', None)
+            return Termin(**termin_args)
 
     def flush(self, *args):
         self._store.put("termine", convert_np_types(self._termine), format='t', append=False)
         self._store.flush(*args)
+
+    def reload(self, *args):
+        self._termine = convert(self._store["termine"])
 
 
 def convert(data:pd.DataFrame) -> pd.DataFrame:
@@ -83,4 +101,5 @@ def convert_np_types(data:pd.DataFrame) -> pd.DataFrame:
     '''
     Creates a DataFrame copy of data with the alternate numpy column types compatible with storing 
     '''
+    for c,t in COLUMNS.items():
     return pd.DataFrame({ c: data[c].astype(t[-1]) for c,t in COLUMNS.items() })
