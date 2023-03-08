@@ -15,9 +15,11 @@ COLUMNS = {
         "verfahren":    [pd.StringDtype(), object],
         "saal":         [pd.StringDtype(), object],
         "hinweis":      [pd.StringDtype(), object],
-        "angekuendigt": [pd.BooleanDtype(),object],
+        # angekuendigt has to managed inside an integer, since pandas stores do not really support bools with NA
+        "angekuendigt": [pd.Int8Dtype(),int],
         "erstellt":     [pd.DatetimeTZDtype(tz=TIMEZONE)],
         "veraendert":   [pd.DatetimeTZDtype(tz=TIMEZONE)],
+        "geloescht":    [pd.DatetimeTZDtype(tz=TIMEZONE)],
         }
 
 class Datenbank:
@@ -46,15 +48,18 @@ class Datenbank:
     def append(self, data:typing.List[Termin]):
         df = {}
         for c in COLUMNS:
-            if c in ('erstellt','veraendert'):
+            if c in ('erstellt','veraendert', 'geloescht'):
                 continue
             df[c] = [ getattr(d, c) for d in data ]
         now_local = datetime.now(zoneinfo.ZoneInfo(TIMEZONE))
-        df['erstellt']   = [now_local for _ in data]
-        df['veraendert'] = [now_local for _ in data]
+        df['erstellt']    = [now_local for _ in data]
+        df['veraendert']  = [now_local for _ in data]
+        df['geloescht']   = [pd.NaT    for _ in data]
+        df['angekuendigt']= [ int(d.angekuendigt) if not pd.isna(d.angekuendigt) else -1 for d in data]
         self.append_frame(pd.DataFrame(df))
 
     def append_frame(self, data:pd.DataFrame):
+        data['angekuendigt'] = data['angekuendigt'].fillna(-1)
         data = convert(data)
         if self._termine is None:
             self._termine = data
@@ -73,15 +78,11 @@ class Datenbank:
             termine = []
             for i,t in self._termine.loc[key].iterrows():
                 termin_args = { **(t) }
-                termin_args.pop('erstellt', None)
-                termin_args.pop('veraendert', None)
-                termine.append(Termin(**termin_args))
+                termine.append(create_termin(**termin_args))
             return termine
         else:
             termin_args = { **(self._termine.loc[key]) }
-            termin_args.pop('erstellt', None)
-            termin_args.pop('veraendert', None)
-            return Termin(**termin_args)
+            return create_termin(**termin_args)
 
     def flush(self, *args):
         self._store.put("termine", convert_np_types(self._termine), format='t', append=False)
@@ -89,6 +90,15 @@ class Datenbank:
 
     def reload(self, *args):
         self._termine = convert(self._store["termine"])
+
+
+def create_termin(**termin_args):
+    termin_args.pop('erstellt', None)
+    termin_args.pop('veraendert', None)
+    termin_args.pop('geloescht', None)
+    a = termin_args['angekuendigt']
+    termin_args['angekuendigt'] = bool(a) if a > 0 else pd.NA
+    return Termin(**termin_args)
 
 
 def convert(data:pd.DataFrame) -> pd.DataFrame:

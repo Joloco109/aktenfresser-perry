@@ -59,6 +59,15 @@ class Perry(discord.Client):
         """
         self.watchlist.flush()
 
+    def speichere_datenbank(self):
+        """
+
+        Returns
+        -------
+
+        """
+        self.datenbank.flush()
+
 
     ################ BOTCOMMANDS ################
 

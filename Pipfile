@@ -7,6 +7,7 @@ name = "pypi"
 numpy = "*"
 pandas = "*"
 tables = "*"
+lxml = "*"
 "discord.py" = {extras = ["voice"], version = "*"}
 
 [dev-packages]
