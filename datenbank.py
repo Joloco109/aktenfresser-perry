@@ -22,6 +22,8 @@ COLUMNS = {
         "geloescht":    [pd.DatetimeTZDtype(tz=TIMEZONE)],
         }
 
+ITEM_SIZES = 100
+
 class Datenbank:
     _store : pd.HDFStore
     _termine: pd.DataFrame
@@ -66,7 +68,7 @@ class Datenbank:
         else:
             #TODO Keep erstellt column, when dropping duplicates
             self._termine = pd.concat((self._termine,data)).drop_duplicates(['aktenzeichen','datum'], keep='last')
-        self._store.put("termine", convert_np_types(data), format='t', append=True)
+        self._store.put("termine", convert_np_types(data), format='t', min_itemsize=ITEM_SIZES, append=True)
 
     def search(self, value, column='aktenzeichen'):
         if isinstance(column, str):
@@ -84,8 +86,12 @@ class Datenbank:
             termin_args = { **(self._termine.loc[key]) }
             return create_termin(**termin_args)
 
+    def __iter__(self):
+        return iter(self[:])
+
     def flush(self, *args):
-        self._store.put("termine", convert_np_types(self._termine), format='t', append=False)
+        self._store.put("termine", convert_np_types(self._termine),
+                        format='t', min_itemsize=ITEM_SIZES, append=False)
         self._store.flush(*args)
 
     def reload(self, *args):

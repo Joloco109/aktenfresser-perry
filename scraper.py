@@ -10,6 +10,8 @@ from datenbank import Datenbank, COLUMNS, TIMEZONE
 
 DEFAULT_SOURCE='https://www.lg-aachen.nrw.de/behoerde/sitzungstermine/index.php?&termsPerPage=0#sitzungsTermineDates'
 
+DATED_SOURCE='https://www.lg-aachen.nrw.de/behoerde/sitzungstermine/index.php?startDate={timestamp}&orderBy=datum&sort=asc&termsPerPage=0#stForm'
+
 tz = zoneinfo.ZoneInfo(TIMEZONE)
 
 def pull(source=DEFAULT_SOURCE, date=dt.date.today()) -> typing.List[Termin]:
@@ -34,7 +36,9 @@ def pull(source=DEFAULT_SOURCE, date=dt.date.today()) -> typing.List[Termin]:
     return termine
 
 def pull_date(date=dt.date.today()) -> typing.List[Termin]:
-    return
+    datetime = dt.datetime.combine(date, dt.time(), tzinfo=tz)
+    source = DATED_SOURCE.format(timestamp=int(datetime.timestamp()))
+    return pull(source, date)
 
 class Scraper:
     _daten: Datenbank
@@ -57,16 +61,42 @@ class Scraper:
         Removes the matching entry from watchlist
         TODO
         '''
-        pass
+        # TODO
+        raise NotImplemented('Removing entries from the watchlist is not yet implemented!')
+
+    def match_watchlist(self, termine: typing.List[Termin]) -> typing.List[Termin]:
+        # TODO improve this, performance is gonna be terrible
+        matches = []
+        for w in self._watchlist:
+            matching = termine
+            for col in COLUMNS:
+                if col in ('erstellt','veraendert', 'geloescht', 'angekuendigt'):
+                    continue
+                target = getattr(w, col)
+                if not pd.isna(target):
+                    matching = [m for m in matching if getattr(m, col) == target]
+            matches.extend(matching)
+        return matches
+
 
     def update(self) -> typing.List[Termin]:
         '''
         Pull the most recent table, append it to daten, mark deleted entries as deleted and
         return list of Termin objects matching watchlist
         '''
-        self._daten.append(pull_date())
-        #TODO
-        return []
+        today = dt.date.today()
+        scraped_daten = []
+        for i in range(7):
+            delta = dt.timedelta(days=i)
+            scrape = pull_date(today+delta)
+            scraped_daten.extend(scrape)
+            # TODO: mark entries not found in scrape as deleted
+            # TODO: mark existing and chanched entries as not angekuendigt
+
+        self._daten.append(scraped_daten)
+        watched = self.match_watchlist(scraped_daten)
+        watched = [w for w in watched if not w.angekuendigt]
+        return watched
 
 #TODO remove this testing code
 data = [ Termin(d,'_',a,'_','_','_',False) for d,a in [('2022-1-1','A'),('2022-1-2','B'),('2022-2-1','C')] ]
