@@ -91,7 +91,7 @@ class Scraper:
             scrape = pull_date(today+delta)
             scraped_daten.extend(scrape)
             # TODO: mark entries not found in scrape as deleted
-            # TODO: mark existing and chanched entries as not angekuendigt
+            # TODO: mark existing and changed entries as not angekuendigt
 
         self._daten.append(scraped_daten)
         watched = self.match_watchlist(scraped_daten)

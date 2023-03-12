@@ -1,28 +1,19 @@
-import typing
+from typing import Union, List
 import pandas as pd
 from datetime import datetime
 import zoneinfo
 from dataclasses import dataclass
-from termin import Termin
+from termin import Termin, create_termin, COLUMNS, TIMEZONE
 
 DEFAULT_HDF_STORE = "./data/daten.h5"
-TIMEZONE = 'Europe/Berlin'
 
-COLUMNS = {
-        "datum":        [pd.DatetimeTZDtype(tz=TIMEZONE)],
-        "beschreibung": [pd.StringDtype(), object],
-        "aktenzeichen": [pd.StringDtype(), object],
-        "verfahren":    [pd.StringDtype(), object],
-        "saal":         [pd.StringDtype(), object],
-        "hinweis":      [pd.StringDtype(), object],
-        # angekuendigt has to managed inside an integer, since pandas stores do not really support bools with NA
-        "angekuendigt": [pd.Int8Dtype(),int],
+COLUMNS = { **COLUMNS,
         "erstellt":     [pd.DatetimeTZDtype(tz=TIMEZONE)],
         "veraendert":   [pd.DatetimeTZDtype(tz=TIMEZONE)],
         "geloescht":    [pd.DatetimeTZDtype(tz=TIMEZONE)],
         }
 
-ITEM_SIZES = 100
+ITEM_SIZES = 128
 
 class Datenbank:
     _store : pd.HDFStore
@@ -47,17 +38,17 @@ class Datenbank:
             raise ValueError('No Termine exist yet')
         return self._termine
 
-    def append(self, data:typing.List[Termin]):
+    def append(self, data:List[Termin]):
         df = {}
         for c in COLUMNS:
             if c in ('erstellt','veraendert', 'geloescht'):
                 continue
             df[c] = [ getattr(d, c) for d in data ]
+        df['angekuendigt']= [ int(d.angekuendigt) if not pd.isna(d.angekuendigt) else -1 for d in data]
         now_local = datetime.now(zoneinfo.ZoneInfo(TIMEZONE))
         df['erstellt']    = [now_local for _ in data]
         df['veraendert']  = [now_local for _ in data]
         df['geloescht']   = [pd.NaT    for _ in data]
-        df['angekuendigt']= [ int(d.angekuendigt) if not pd.isna(d.angekuendigt) else -1 for d in data]
         self.append_frame(pd.DataFrame(df))
 
     def append_frame(self, data:pd.DataFrame):
@@ -71,23 +62,28 @@ class Datenbank:
         self._store.put("termine", convert_np_types(data), format='t', min_itemsize=ITEM_SIZES, append=True)
 
     def search(self, value, column='aktenzeichen'):
+        # TODO
         if isinstance(column, str):
             column = [column]
         return
 
-    def __getitem__(self, key) -> typing.Union[Termin, typing.List[Termin]]:
+    def __getitem__(self, key) -> Union[Termin, List[Termin]]:
         if isinstance(key,  slice):
             termine = []
-            for i,t in self._termine.loc[key].iterrows():
+            for i,t in self._termine.iloc[key].iterrows():
                 termin_args = { **(t) }
+                termin_args = {key:val for key,val in termin_args.items()
+                               if key not in ['erstellt','veraendert','geloescht']}
                 termine.append(create_termin(**termin_args))
             return termine
         else:
-            termin_args = { **(self._termine.loc[key]) }
+            termin_args = { **(self._termine.iloc[key]) }
+            termin_args = {key:val for key,val in termin_args.items()
+                           if key not in ['erstellt','veraendert','geloescht']}
             return create_termin(**termin_args)
 
     def __iter__(self):
-        return iter(self[:])
+        return iter(self[:]) if self._termine is not None else iter([])
 
     def flush(self, *args):
         self._store.put("termine", convert_np_types(self._termine),
@@ -96,15 +92,6 @@ class Datenbank:
 
     def reload(self, *args):
         self._termine = convert(self._store["termine"])
-
-
-def create_termin(**termin_args):
-    termin_args.pop('erstellt', None)
-    termin_args.pop('veraendert', None)
-    termin_args.pop('geloescht', None)
-    a = termin_args['angekuendigt']
-    termin_args['angekuendigt'] = bool(a) if a > 0 else pd.NA
-    return Termin(**termin_args)
 
 
 def convert(data:pd.DataFrame) -> pd.DataFrame:
