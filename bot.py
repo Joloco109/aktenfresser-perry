@@ -31,8 +31,8 @@ class Perry(discord.Client):
         # Note: When using commands.Bot instead of discord.Client, the bot will
         # maintain its own tree instead.
         self.tree = app_commands.CommandTree(self)
-        self.watchlist = Datenbank(DATA_STORAGE+"/watch.h5")
-        self.datenbank = Datenbank(DATA_STORAGE+"/daten.h5")
+        self.watchlist = Datenbank(DATA_STORAGE + "/watch.h5")
+        self.datenbank = Datenbank(DATA_STORAGE + "/daten.h5")
         self.scraper = Scraper(datenbank=self.datenbank, watchlist=self.watchlist)
 
     def website_abrufen(self) -> None:
@@ -68,7 +68,6 @@ class Perry(discord.Client):
         """
         self.datenbank.flush()
 
-
     ################ BOTCOMMANDS ################
 
     async def setup_hook(self):
@@ -78,6 +77,7 @@ class Perry(discord.Client):
 
         # Website des Gerichts jede Stunde scrapen und eventuelle Änderungen anzeigen
         self.refresh_database.start()
+        # await self.refresh_database()
 
     async def on_ready(self):
         print(f'Logged in as {self.user} (ID: {self.user.id})')
@@ -89,6 +89,10 @@ class Perry(discord.Client):
         watched = self.scraper.update()
 
         # TODO ankuendigen
+
+        for termin in watched:
+            await channel.send(termin.ankuendigen())
+
 
         # write the list back to termine, with all changes
         self.datenbank.append(watched)
@@ -116,8 +120,8 @@ async def hello(interaction: discord.Interaction):
 async def az_hinzufuegen(interaction: discord.Interaction, aktenzeichen: str):
     cleaned_az = utils.clean_akteneichen(aktenzeichen)
 
-    if cleaned_az is None:
-        perry.scraper.watch({"aktenzeichen":cleaned_az})
+    if cleaned_az is not None:
+        perry.scraper.watch({"aktenzeichen": cleaned_az})
         await interaction.response.send_message(f"Das Aktenzeichen {cleaned_az} wurde auf die Watchlist aufgenommen!")
     else:
         await interaction.response.send_message(
@@ -129,7 +133,7 @@ async def az_entfernen(interaction: discord.Interaction, aktenzeichen: str):
     cleaned_az = utils.clean_akteneichen(aktenzeichen)
 
     if cleaned_az is None:
-        perry.scraper.unwatch({"aktenzeichen":cleaned_az})
+        perry.scraper.unwatch({"aktenzeichen": cleaned_az})
         await interaction.response.send_message(f"Das Aktenzeichen {aktenzeichen} wurde aus der Watchlist entfernt!")
     else:
         await interaction.response.send_message(
