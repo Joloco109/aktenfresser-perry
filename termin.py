@@ -1,4 +1,4 @@
-from typing import Union, List
+from typing import Optional, Union, List
 from dataclasses import dataclass
 import datetime
 
@@ -47,11 +47,11 @@ class Termin:
 
 def create_termin(**termin_args):
     a = termin_args['angekuendigt']
-    termin_args['angekuendigt'] = bool(a) if a > 0 else pd.NA
+    termin_args['angekuendigt'] = bool(a) if not a < 0 else pd.NA
     return Termin(**termin_args)
 
 class TerminList:
-    _termine : pd.DataFrame
+    _termine : Optional[pd.DataFrame]
 
     def __init__(self, termine: Union[pd.DataFrame, Termin, List[Termin]]):
         if isinstance(termine, pd.DataFrame):
@@ -59,21 +59,30 @@ class TerminList:
         else:
             if isinstance(termine, Termin):
                 termine = [termine]
-            df = {}
-            for c in COLUMNS.keys():
-                if c == 'angekuendigt':
-                    continue
-                df[c] = [ getattr(t, c) for t in termine ]
-            df['angekuendigt']= [ int(t.angekuendigt) if not pd.isna(t.angekuendigt) else -1 for t in termine]
-            self._termine = pd.DataFrame(df)
+            if len(termine) > 0:
+                df = {}
+                for c in COLUMNS.keys():
+                    if c == 'angekuendigt':
+                        continue
+                    df[c] = [ getattr(t, c) for t in termine ]
+                df['angekuendigt']= [ int(t.angekuendigt) if not pd.isna(t.angekuendigt) else -1 for t in termine]
+                self._termine = pd.DataFrame(df)
+            else:
+                self._termine = None
 
     def copy(self, *args, **kwargs) -> 'TerminList':
-        return TerminList(self._termine.copy(*args, **kwargs))
+        return TerminList(self._termine.copy(*args, **kwargs) if self._termine is not None else [])
 
     def concat(self, termine: Union[pd.DataFrame, Termin, List[Termin], 'TerminList']) -> 'TerminList':
         if not isinstance(termine, TerminList):
             termine = TerminList(termine)
-        return TerminList(pd.concat((self._termine, termine._termine)))
+        if self._termine is None and termine._termine is None:
+            return TerminList([])
+        else:
+            return TerminList(pd.concat((self._termine, termine._termine)))
+
+    def __len__(self):
+        return len(self._termine) if self._termine is not None else 0
 
     def __setitem__(self, key, value: Union[pd.DataFrame, Termin, List[Termin], 'TerminList']):
         if not isinstance(value, TerminList):
@@ -92,4 +101,4 @@ class TerminList:
             return create_termin(**termin_args)
 
     def __iter__(self):
-        return iter(self[:])
+        return iter(self[:]) if self._termine is not None else iter([])

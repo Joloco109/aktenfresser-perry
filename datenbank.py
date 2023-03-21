@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 import zoneinfo
 from dataclasses import dataclass
-from termin import Termin, create_termin, COLUMNS, TIMEZONE
+from termin import Termin, TerminList, COLUMNS, TIMEZONE
 
 DEFAULT_HDF_STORE = "./data/daten.h5"
 
@@ -30,22 +30,17 @@ class Datenbank:
             self._termine = None
 
     @property
-    def termine(self):
+    def termine(self) -> TerminList:
         '''
         Get the termine DataFrame of the Datenbank.
         After modifiying this you should call flush to sync to disc.
         '''
         if self._termine is None:
             raise ValueError('No Termine exist yet')
-        return self._termine
+        return TerminList(self._termine)
 
-    def append(self, data: List[Termin]):
-        df = {}
-        for c in COLUMNS:
-            if c in ('erstellt', 'veraendert', 'geloescht'):
-                continue
-            df[c] = [getattr(d, c) for d in data]
-        df['angekuendigt'] = [int(d.angekuendigt) if not pd.isna(d.angekuendigt) else -1 for d in data]
+    def append(self, data: TerminList):
+        df = data._termine.to_dict(orient='list')
         now_local = datetime.now(zoneinfo.ZoneInfo(TIMEZONE))
         df['erstellt'] = [now_local for _ in data]
         df['veraendert'] = [now_local for _ in data]
@@ -66,22 +61,10 @@ class Datenbank:
         # TODO
         if isinstance(column, str):
             column = [column]
-        return
+        raise NotImplementedError('Searching columns is unfortunatly not yet implemented!')
 
-    def __getitem__(self, key) -> Union[Termin, List[Termin]]:
-        if isinstance(key, slice):
-            termine = []
-            for i, t in self._termine.iloc[key].iterrows():
-                termin_args = {**(t)}
-                termin_args = {key: val for key, val in termin_args.items()
-                               if key not in ['erstellt', 'veraendert', 'geloescht']}
-                termine.append(create_termin(**termin_args))
-            return termine
-        else:
-            termin_args = {**(self._termine.iloc[key])}
-            termin_args = {key: val for key, val in termin_args.items()
-                           if key not in ['erstellt', 'veraendert', 'geloescht']}
-            return create_termin(**termin_args)
+    def __getitem__(self, key) -> Union[Termin, TerminList]:
+        return TerminList(self._termine)[key]
 
     def __iter__(self):
         return iter(self[:]) if self._termine is not None else iter([])

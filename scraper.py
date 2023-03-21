@@ -1,11 +1,11 @@
-import typing
 from dataclasses import dataclass
 import datetime as dt
 import zoneinfo
 import pandas as pd
 import urllib.request
+import functools
 
-from termin import Termin
+from termin import Termin, TerminList
 from datenbank import Datenbank, COLUMNS, TIMEZONE
 
 DEFAULT_SOURCE='https://www.lg-aachen.nrw.de/behoerde/sitzungstermine/index.php?&termsPerPage=0#sitzungsTermineDates'
@@ -14,7 +14,7 @@ DATED_SOURCE='https://www.lg-aachen.nrw.de/behoerde/sitzungstermine/index.php?st
 
 tz = zoneinfo.ZoneInfo(TIMEZONE)
 
-def pull(source=DEFAULT_SOURCE, date=dt.date.today()) -> typing.List[Termin]:
+def pull(source=DEFAULT_SOURCE, date=dt.date.today()) -> TerminList:
     with urllib.request.urlopen(source) as fp:
         content = fp.read().decode('utf-8')
     tables = pd.read_html(content)
@@ -33,9 +33,9 @@ def pull(source=DEFAULT_SOURCE, date=dt.date.today()) -> typing.List[Termin]:
         saal         = t['Saal']
         hinweis      = t['Hinweis'] if not pd.isna(t['Hinweis']) else pd.NA
         termine.append( Termin(datetime, beschreibung, aktenzeichen, verfahren, saal, hinweis, False) )
-    return termine
+    return TerminList(termine)
 
-def pull_date(date=dt.date.today()) -> typing.List[Termin]:
+def pull_date(date=dt.date.today()) -> TerminList:
     datetime = dt.datetime.combine(date, dt.time(), tzinfo=tz)
     source = DATED_SOURCE.format(timestamp=int(datetime.timestamp()))
     return pull(source, date)
@@ -64,11 +64,12 @@ class Scraper:
         # TODO
         raise NotImplemented('Removing entries from the watchlist is not yet implemented!')
 
-    def match_watchlist(self, termine: typing.List[Termin]) -> typing.List[Termin]:
+    def match_watchlist(self, termine: TerminList) -> TerminList:
         # TODO improve this, performance is gonna be terrible
+        # It should probably be moved partially into TerminList
         matches = []
         for w in self._watchlist:
-            matching = termine
+            matching = termine[:]
             for col in COLUMNS:
                 if col in ('erstellt','veraendert', 'geloescht', 'angekuendigt'):
                     continue
@@ -76,10 +77,10 @@ class Scraper:
                 if not pd.isna(target):
                     matching = [m for m in matching if getattr(m, col) == target]
             matches.extend(matching)
-        return matches
+        return TerminList(matches)
 
 
-    def update(self) -> typing.List[Termin]:
+    def update(self) -> TerminList:
         '''
         Pull the most recent table, append it to daten, mark deleted entries as deleted and
         return list of Termin objects matching watchlist
@@ -89,13 +90,14 @@ class Scraper:
         for i in range(7):
             delta = dt.timedelta(days=i)
             scrape = pull_date(today+delta)
-            scraped_daten.extend(scrape)
+            scraped_daten.append(scrape)
             # TODO: mark entries not found in scrape as deleted
             # TODO: mark existing and changed entries as not angekuendigt
+        scraped_daten = functools.reduce(TerminList.concat, scraped_daten)
 
         self._daten.append(scraped_daten)
         watched = self.match_watchlist(scraped_daten)
-        watched = [w for w in watched if not w.angekuendigt]
+        watched = TerminList([w for w in watched if not w.angekuendigt])
         return watched
 
 #TODO remove this testing code
