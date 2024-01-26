@@ -1,24 +1,29 @@
 from dataclasses import asdict
-from bson import json_util
-import json
 from pymongo import MongoClient
+from tqdm import tqdm
+from scraper import Scraper
 
-from src.scraper import Scraper
+GERICHTE = []
 
 if __name__ == "__main__":
-    scraper = Scraper()
-    scrape = scraper.update()
+
+    # Load All NRW Gerichte form file
+
+    with open("gerichte_nrw.txt", "r") as gerichte_provider:
+        for line in gerichte_provider:
+            GERICHTE.append(line.replace("ü", "ue").replace("ä", "ae").replace("ö", "oe").rstrip())
 
     # Provide the mongodb atlas url to connect python to mongodb using pymongo
     CONNECTION_STRING = "mongodb://root:example@localhost"
-
-    # Create a connection using MongoClient. You can import MongoClient or use pymongo.MongoClient
     client = MongoClient(CONNECTION_STRING)
     db = client["Gerichtstermine"]
-    collection = db["LG Aachen"]
 
-    json_termine = asdict(scrape)
+    for gericht in tqdm(GERICHTE):
+        scraper = Scraper(gericht)
+        scrape = scraper.update()
 
-    print(json_termine)
+        collection = db[gericht]
 
-    collection.insert_one(json_termine)
+        json_termine = asdict(scrape)
+        collection.insert_one(json_termine)
+
