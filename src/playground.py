@@ -1,3 +1,4 @@
+import time
 from dataclasses import asdict
 from pymongo import MongoClient
 from tqdm import tqdm
@@ -5,7 +6,8 @@ from scraper import Scraper
 
 GERICHTE = []
 
-if __name__ == "__main__":
+
+def run_scrape():
 
     # Load All NRW Gerichte form file
 
@@ -14,7 +16,7 @@ if __name__ == "__main__":
             GERICHTE.append(line.replace("ü", "ue").replace("ä", "ae").replace("ö", "oe").rstrip())
 
     # Provide the mongodb atlas url to connect python to mongodb using pymongo
-    CONNECTION_STRING = "mongodb://root:example@localhost"
+    CONNECTION_STRING = "mongodb://root:example@mongo"
     client = MongoClient(CONNECTION_STRING)
     db = client["Gerichtstermine"]
 
@@ -27,3 +29,6 @@ if __name__ == "__main__":
         json_termine = asdict(scrape)
         collection.insert_one(json_termine)
 
+
+if __name__ == "__main__":
+    run_scrape()

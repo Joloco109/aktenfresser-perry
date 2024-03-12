@@ -10,9 +10,9 @@ RUN pip3 install pipenv
 RUN pipenv install --system --deploy --ignore-pipfile
 
 #Copy the actual Project source
-
 COPY ./src /app/
+COPY gerichte_nrw.txt /app/
 
 
 STOPSIGNAL SIGTERM
-CMD ["python3 playground.py"]
+CMD ["python3", "scheduled_scrape.py"]

@@ -9,6 +9,7 @@ pymongo = "*"
 pandas = "*"
 lxml = "*"
 tqdm = "*"
+schedule = "*"
 
 [dev-packages]
 
